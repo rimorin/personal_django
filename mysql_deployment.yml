@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: django-mysql
+  labels:
+    app: django
+spec:
+  ports:
+    - port: 3306
+  selector:
+    app: django
+    tier: mysql
+  clusterIP: None
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pv-claim
+  labels:
+    app: django
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1 # for versions before 1.9.0 use apps/v1beta2
+kind: Deployment
+metadata:
+  name: django-mysql
+  labels:
+    app: django
+spec:
+  selector:
+    matchLabels:
+      app: django
+      tier: mysql
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: django
+        tier: mysql
+    spec:
+      containers:
+      - image: mysql:latest
+        name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: root
+              key: password
+        ports:
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+        - name: mysql-config-volume ## specify volume name
+          mountPath: /etc/mysql/conf.d/default_auth.cnf ## path to mount file
+          subPath: default_auth ## name of config
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-pv-claim
+      - name: mysql-config-volume ## volume name
+        configMap:
+          name: mysql-config ## name of ConfigMap
